@@ -50,6 +50,7 @@ printf "$YELLOW> Checking repositories with command '$type' ...\n"
 root=$PWD
 repos=0
 numReposMatched=0
+numCommits=0
 find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vscode/*" \) -prune -false -o -name '*.git' | while read -r dir; do
   # sanity check
   if [[ $dir == *"/.git" ]]; then
@@ -64,6 +65,7 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
     if [[ $type == "status" ]]; then
 
       if [[ $gst == *"Your branch is ahead"* ]]; then
+        ((numCommits++))
         ((numReposMatched++))
         printf "$LBLUE"
         printf "$pure\n$LRED"
@@ -74,17 +76,21 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
       fi
     elif [[ $type == "log" ]] && [[ $gst == *" "* ]]; then
       if [[ $filterByAuthor ]]; then
+        hasPrintedRepoName=false
         commitLine=""
         while read -r line; do
           if [[ $line == *"Author"* ]]; then
             if [[ $line == *"Author: $gitAuthor <$gitEmail>"* ]]; then
-              ((numReposMatched++))
-              printf "$LBLUE"
-              printf "$pure\n$LRED"
-
+              ((numCommits++))
               authorMatched=true
-              echo "$commitLine"
-              echo "$line"
+
+              if [[ $hasPrintedRepoName == "false" ]]; then
+                printf "$YELLOW"
+                printf "$pure\n$LRED"
+                hasPrintedRepoName=true
+              fi
+              echo "$LBLUE$commitLine"
+              echo "$LRED$line"
             else
               authorMatched=false
             fi
@@ -95,14 +101,13 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
             echo "$line"
           fi
         done <<<"$gst"
+        ((numReposMatched++))
         printf "\n$NC"
         printf %"$COLUMNS"s | tr " " "-"
       else
-        ((numReposMatched++))
         printf "$LBLUE"
         printf "$pure\n$LRED"
         printf "$gst"
-
         printf "\n$NC"
         printf %"$COLUMNS"s | tr " " "-"
       fi
@@ -111,10 +116,10 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
 done
 
 if [[ $type == "status" ]]; then
-  echo "${YELLOW}> Checked $repos repositories, $numReposMatched are ahead"
+  echo "${YELLOW}> Checked $repos repositories, $numReposMatched are ahead with a total of $numCommits commits"
 elif [[ $type == "log" ]]; then
   if [[ $filterByAuthor ]]; then
-    echo "${YELLOW}> Checked $repos repositories, $numReposMatched of which contained commits by you within the given date range"
+    echo "${YELLOW}> Checked $repos repositories, $numReposMatched of which contained a total of $numCommits commits by you within the given date range"
   else
     echo "${YELLOW}> Checked $repos repositories, $numReposMatched contained commits within the given date range"
   fi
