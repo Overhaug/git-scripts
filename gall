@@ -6,6 +6,7 @@ YELLOW="\033[1;33m"
 NC="\033[0m"
 
 args=("$@")
+gitAuthor="$(eval "git config --global --get user.name")"
 
 validateDate() {
   IFS=\= read -r left right <<<"$1"
@@ -14,6 +15,15 @@ validateDate() {
     return 0
   else
     echo "Date $right is in an invalid format (not YYYY-MM-DD)"
+    return 1
+  fi
+}
+
+splitAndValidateArgOnEq() {
+  IFS=\= read -r left right <<<"$1"
+  if [[ $right != "" ]] && [[ $left != "" ]]; then
+    return 0
+  else
     return 1
   fi
 }
@@ -34,6 +44,7 @@ if [[ ${args[1]} == "status" ]]; then
 elif [[ ${args[1]} == "log" ]]; then
   gitCommand="--no-pager log --date=local --decorate=short"
   type="log"
+  unrecognizedArgs=()
   for arg in ${args}; do
     if [[ $arg == "--before"* ]] || [[ $arg == "--after"* ]]; then
       if validateDate "$arg"; then
@@ -41,17 +52,19 @@ elif [[ ${args[1]} == "log" ]]; then
       else
         exit
       fi
-    elif [[ $arg == "onlyself" ]]; then
-      filterByAuthor=true
+    elif [[ $arg == "--author"* ]]; then
+      splitAndValidateArgOnEq "$arg"
+      gitCommand="$gitCommand --author='$right'"
+    elif [[ $arg == "self" ]]; then
+      gitCommand="$gitCommand --author='$gitAuthor'"
+    elif [[ $arg != "$type" ]]; then
+      unrecognizedArgs+=("$arg")
     fi
   done
 else
   echo "You must specify a command"
   exit
 fi
-
-gitAuthor="$(eval "git config --global --get user.name")"
-gitEmail="$(eval "git config --global --get user.email")"
 
 printf "$YELLOW> Checking repositories with command '$gitCommand' ...\n"
 
@@ -73,7 +86,6 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
 
     if [[ $type == "status" ]]; then
       if [[ $gst == *"Your branch is ahead"* ]]; then # todo a faster way of matching?
-        ((numCommits++))
         ((numReposMatched++))
 
         printRepoPath
@@ -82,57 +94,32 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
         insertSeparator
       fi
     elif [[ $type == "log" ]] && [[ $gst == *" "* ]]; then
-      if [[ $filterByAuthor == "true" ]]; then
-        hasPrintedRepoPath=false
-        commitLine=""
-        while read -r line; do
-          if [[ $line == *"Author"* ]]; then
-            if [[ $line == *"Author: $gitAuthor <$gitEmail>"* ]]; then
-              ((numCommits++))
-              authorMatched=true
-              if [[ $hasPrintedRepoPath == "false" ]]; then
-                printRepoPath
-                hasPrintedRepoPath=true
-                ((numReposMatched++))
-              fi
-              echo "$YELLOW$commitLine"
-              echo "$NC$line"
-            else
-              authorMatched=false
-            fi
-          elif [[ $line == *"commit"* ]]; then
-            commitLine="$line"
-            authorMatched=false
-          elif [[ $authorMatched == "true" ]]; then
-            echo "$line"
-          fi
-        done <<<"$gst"
+      printRepoPath
+      ((numReposMatched++))
+      while read -r line; do
+        if [[ $line == *"commit"* ]]; then
+          ((numCommits++))
+          echo "$YELLOW$line"
+        else
+          echo "$NC$line"
+        fi
+      done <<<"$gst"
 
-        insertSeparator
-      else
-        printRepoPath
-        ((numReposMatched++))
-        while read -r line; do
-          if [[ $line == *"commit"* ]]; then
-            ((numCommits++))
-            echo "$YELLOW$line"
-          else
-            echo "$NC$line"
-          fi
-        done <<<"$gst"
-
-        insertSeparator
-      fi
+      insertSeparator
     fi
   fi
 done
 
 if [[ $type == "status" ]]; then
-  echo "${YELLOW}> Checked $repos repositories, $numReposMatched are ahead with a total of $numCommits commits"
+  echo "${YELLOW}> Checked $repos repositories, $numReposMatched are ahead"
 elif [[ $type == "log" ]]; then
   if [[ $filterByAuthor == "true" ]]; then
     echo "${YELLOW}> Checked $repos repositories, where $numReposMatched contained $numCommits commits by you within the given date range"
   else
     echo "${YELLOW}> Checked $repos repositories, where $numReposMatched contained $numCommits commits within the given date range"
   fi
+fi
+
+if ((${#unrecognizedArgs[@]} != 0)); then
+  echo "Ignored arguments: $unrecognizedArgs"
 fi
