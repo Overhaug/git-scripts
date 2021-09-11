@@ -35,14 +35,14 @@ insertSeparator() {
 
 printRepoPath() {
   printf "$LBLUE"
-  printf "$pure\n"
+  printf "$pure\n$NC"
 }
 
 if [[ ${args[1]} == "status" ]]; then
   gitCommand="status"
   type="status"
 elif [[ ${args[1]} == "log" ]]; then
-  gitCommand="--no-pager log --date=local --decorate=short"
+  gitCommand="--no-pager log --date=local --decorate=short --pretty=format"
   type="log"
   unrecognizedArgs=()
   for arg in ${args}; do
@@ -56,22 +56,35 @@ elif [[ ${args[1]} == "log" ]]; then
       splitAndValidateArgOnEq "$arg"
       gitCommand="$gitCommand --author='$right'"
     elif [[ $arg == "self" ]]; then
+      filterByAuthor="true"
       gitCommand="$gitCommand --author='$gitAuthor'"
     elif [[ $arg != "$type" ]]; then
       unrecognizedArgs+=("$arg")
     fi
   done
+elif [[ ${args[1]} == "cmd" ]]; then
+  type="cmd"
+  echo -n "Command: git "
+  read answer
+  gitCommand=$answer
+
+  echo -n "Sure? (y/n) "
+  read answer2
+  if [[ $answer2 == "n" ]]; then
+    exit
+  fi
 else
   echo "You must specify a command"
   exit
 fi
 
-printf "$YELLOW> Checking repositories with command '$gitCommand' ...\n"
+printf "$YELLOW> Checking repositories with command 'git $gitCommand' ...$NC \n"
 
 root=$PWD
 repos=0
 numReposMatched=0
 numCommits=0
+numCommitsByAuthor=0
 find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vscode/*" \) -prune -false -o -name '*.git' | while read -r dir; do
   # sanity check
   if [[ $dir == *"/.git" ]]; then
@@ -83,29 +96,35 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
     # Run command in repo
     eval "cd $root/$pure"
     gst="$(eval "git $gitCommand")"
-
     if [[ $type == "status" ]]; then
       if [[ $gst == *"Your branch is ahead"* ]]; then # todo a faster way of matching?
         ((numReposMatched++))
-
         printRepoPath
-        printf "$LRED$gst" | sed -n 1,2p
-
+        printf "$gst" | sed -n 1,2p
         insertSeparator
       fi
     elif [[ $type == "log" ]] && [[ $gst == *" "* ]]; then
       printRepoPath
       ((numReposMatched++))
+      printf "$gst"
+
       while read -r line; do
-        if [[ $line == *"commit"* ]]; then
+        if [[ $filterByAuthor == "true" ]]; then
+          ((numCommitsByAuthor++))
           ((numCommits++))
-          echo "$YELLOW$line"
         else
-          echo "$NC$line"
+          ((numCommits++))
         fi
       done <<<"$gst"
 
       insertSeparator
+    elif [[ $type == "cmd" ]]; then
+      if [[ $gst == *" "* ]]; then
+        printRepoPath
+        ((numReposMatched++))
+        printf "$gst"
+        insertSeparator
+      fi
     fi
   fi
 done
@@ -114,9 +133,9 @@ if [[ $type == "status" ]]; then
   echo "${YELLOW}> Checked $repos repositories, $numReposMatched are ahead"
 elif [[ $type == "log" ]]; then
   if [[ $filterByAuthor == "true" ]]; then
-    echo "${YELLOW}> Checked $repos repositories, where $numReposMatched contained $numCommits commits by you within the given date range"
+    echo "${YELLOW}> Checked $repos repositories, of which $numReposMatched contained $numCommits commits, $numCommitsByAuthor by you, within the given date range"
   else
-    echo "${YELLOW}> Checked $repos repositories, where $numReposMatched contained $numCommits commits within the given date range"
+    echo "${YELLOW}> Checked $repos repositories, of which $numReposMatched contained a total of $numCommits commits within the given date range"
   fi
 fi
 
