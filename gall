@@ -42,11 +42,11 @@ if [[ ${args[1]} == "status" ]]; then
   gitCommand="status"
   type="status"
 elif [[ ${args[1]} == "log" ]]; then
-  gitCommand="--no-pager log --date=local --decorate=short --pretty=format"
+  gitCommand="log --graph --pretty=format:""'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit"
   type="log"
   unrecognizedArgs=()
   for arg in ${args}; do
-    if [[ $arg == "--before"* ]] || [[ $arg == "--after"* ]]; then
+    if [[ $arg == "--until"* ]] || [[ $arg == "--since"* ]]; then
       if validateDate "$arg"; then
         gitCommand="$gitCommand $validDate"
       else
@@ -58,6 +58,9 @@ elif [[ ${args[1]} == "log" ]]; then
     elif [[ $arg == "self" ]]; then
       filterByAuthor="true"
       gitCommand="$gitCommand --author='$gitAuthor'"
+    elif [[ $arg == "--max"* ]]; then
+      splitAndValidateArgOnEq "$arg"
+      gitCommand="$gitCommand -n$right"
     elif [[ $arg != "$type" ]]; then
       unrecognizedArgs+=("$arg")
     fi
@@ -67,6 +70,7 @@ elif [[ ${args[1]} == "cmd" ]]; then
   echo -n "Command: git "
   read answer
   gitCommand=$answer
+  cmdType=$answer
 
   echo -n "Sure? (y/n) "
   read answer2
@@ -78,7 +82,11 @@ else
   exit
 fi
 
-printf "$YELLOW> Checking repositories with command 'git $gitCommand' ...$NC \n"
+if [[ $type == "cmd" ]]; then
+  printf "$YELLOW> Executing git command '$cmdType' over repositores in $PWD ...$NC \n"
+else
+  printf "$YELLOW> Executing git command '$type' over repositores in $PWD ...$NC \n"
+fi
 
 root=$PWD
 repos=0
