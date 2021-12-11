@@ -1,9 +1,99 @@
 #!/bin/zsh
 
-LBLUE="\033[1;34m"
-LRED="\033[1;31m"
-YELLOW="\033[1;33m"
-NC="\033[0m"
+BLUE="\e[0;34m"
+LBLUE="\e[1;34m"
+RED="\e[0;31m"
+LRED="\e[1;31m"
+GREEN="\e[0;32m"
+LGREEN="\e[1;32m"
+DGREEN="\e[1;30m"
+YELLOW="\e[1;33m"
+PURPLE="\e[0;35m"
+LPURPLE="\e[1;35m"
+CYAN="\e[0;36m"
+LCYAN="\e[1;36m"
+LGRAY="\e[0;37m"
+WHITE="\e[1;37m"
+BLACK="\e[0;30m"
+NC="\e[0m"
+
+declare -A colors
+colors=(
+  [yellow]=$YELLOW
+  [blue]=$BLUE
+  [lightblue]=$LBLUE
+  [red]=$RED
+  [lightred]=$LRED
+  [green]=$GREEN
+  [lightgreen]=$LGREEN
+  [darkgreen]=$DGREEN
+  [purple]=$PURPLE
+  [lightpurple]=$LPURPLE
+  [cyan]=$CYAN
+  [lightcyan]=$LCYAN
+  [lightgrey]=$LGRAY
+  [white]=$WHITE
+  [white]=$BLACK
+  [nocolor]=$NC
+)
+
+typeset -A config
+config=(# set default values
+  [repoColor]="lightblue"
+  [commitColor]="nocolor"
+  [resultColor]="yellow"
+  [repoSepColor]="nocolor"
+)
+
+scriptDir=$(dirname "$0")
+while read -r line; do
+  if echo "$line" | grep -F = &>/dev/null; then
+    varname=$(echo "$line" | cut -d '=' -f 1)
+    config[$varname]=$(echo "$line" | cut -d '=' -f 2-)
+  fi
+done <"$scriptDir"/gall.conf
+
+HELP="${colors[nocolor]}help
+Commands:
+  status - checks status of all repositories in current directory
+  log - prints log of all repositories in current directory
+    flags:
+     --since - date on which to find commits since, format YYYY-MM-DD
+     --until - date on which to find commits until, format YYYY-MM-DD
+     --self - only find commits by you (filtered by user.name in global git config)
+     --author - only find commits by specified author (username)
+   cmd - run any git command in all repositories in current directory
+
+You can set custom colors in gall.conf:
+  repoColor - Repository heading color
+  commitColor - Commit line color
+  resultColor - Result line color
+  repoSepColor - Repository line separator color
+
+  Available colors:
+    ${colors[nocolor]}Reds:
+      - ${colors[red]}red
+      - ${colors[lightred]}lightred
+    ${colors[nocolor]}Blues:
+      - ${colors[blue]}blue
+      - ${colors[lightblue]}lightblue
+    ${colors[nocolor]}Greens:
+      - ${colors[green]}green
+      - ${colors[lightgreen]}lightgreen
+      - ${colors[darkgreen]}darkgreen
+    ${colors[nocolor]}Cyans:
+      - ${colors[cyan]}cyan
+      - ${colors[lightcyan]}lightcyan
+    ${colors[nocolor]}Purples:
+      - ${colors[purple]}purple
+      - ${colors[lightpurple]}lightpurple
+    ${colors[nocolor]}Yellows:
+      - ${colors[yellow]}yellow
+    ${colors[nocolor]}Miscellaneous:
+      - nocolor (sets back to default)
+      - white
+      - black
+"
 
 args=("$@")
 gitAuthor="$(eval "git config --global --get user.name")"
@@ -28,13 +118,13 @@ splitAndValidateArgOnEq() {
   fi
 }
 
-insertSeparator() {
-  printf "\n$NC"
+separator() {
+  printf "\n${colors[${config[repoSepColor]}]}"
   printf %"$COLUMNS"s | tr " " "-"
 }
 
 printRepoPath() {
-  printf "$LBLUE"
+  printf "${colors[${config[repoColor]}]}"
   printf "$pure\n$NC"
 }
 
@@ -58,9 +148,6 @@ elif [[ ${args[1]} == "log" ]]; then
     elif [[ $arg == "self" ]]; then
       filterByAuthor="true"
       gitCommand="$gitCommand --author='$gitAuthor'"
-    elif [[ $arg == "--max"* ]]; then
-      splitAndValidateArgOnEq "$arg"
-      gitCommand="$gitCommand -n$right"
     elif [[ $arg != "$type" ]]; then
       unrecognizedArgs+=("$arg")
     fi
@@ -78,15 +165,10 @@ elif [[ ${args[1]} == "cmd" ]]; then
     exit
   fi
 else
-  echo "You must specify a command"
+  echo -e "$HELP"
   exit
 fi
 
-if [[ $type == "cmd" ]]; then
-  printf "$YELLOW> Executing git command '$cmdType' over repositores in $PWD ...$NC \n"
-else
-  printf "$YELLOW> Executing git command '$type' over repositores in $PWD ...$NC \n"
-fi
 
 root=$PWD
 repos=0
@@ -101,20 +183,19 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
     pure="${dir//\/.git/}"
     pure="${pure//./}"
 
-    # Run command in repo
     eval "cd $root/$pure"
-    gst="$(eval "git $gitCommand")"
+    git="$(eval "git $gitCommand")"
     if [[ $type == "status" ]]; then
-      if [[ $gst == *"Your branch is ahead"* ]]; then # todo a faster way of matching?
+      if [[ $git == *"Your branch is ahead"* ]]; then # todo a faster way of matching?
         ((numReposMatched++))
         printRepoPath
-        printf "$gst" | sed -n 1,2p
-        insertSeparator
+        printf "${colors[${config[commitColor]}]}$git" | sed -n 1,2p
+        separator
       fi
-    elif [[ $type == "log" ]] && [[ $gst == *" "* ]]; then
+    elif [[ $type == "log" ]] && [[ $git == *" "* ]]; then
       printRepoPath
       ((numReposMatched++))
-      printf "$gst"
+      printf "${colors[${config[commitColor]}]}$git"
 
       while read -r line; do
         if [[ $filterByAuthor == "true" ]]; then
@@ -123,30 +204,30 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
         else
           ((numCommits++))
         fi
-      done <<<"$gst"
+      done <<<"$git"
 
-      insertSeparator
+      separator
     elif [[ $type == "cmd" ]]; then
-      if [[ $gst == *" "* ]]; then
+      if [[ $git == *" "* ]]; then
         printRepoPath
         ((numReposMatched++))
-        printf "$gst"
-        insertSeparator
+        printf "${colors[${config[commitColor]}]}$git"
+        separator
       fi
     fi
   fi
 done
 
 if [[ $type == "status" ]]; then
-  echo "${YELLOW}> Checked $repos repositories, $numReposMatched are ahead"
+  echo "${colors[${config[resultColor]}]}> Checked $repos repositories, $numReposMatched are ahead"
 elif [[ $type == "log" ]]; then
   if [[ $filterByAuthor == "true" ]]; then
-    echo "${YELLOW}> Checked $repos repositories, of which $numReposMatched contained $numCommits commits, $numCommitsByAuthor by you, within the given date range"
+    echo "${colors[${config[resultColor]}]}> Found $numCommitsByAuthor commits by you in $numReposMatched/$repos repos"
   else
-    echo "${YELLOW}> Checked $repos repositories, of which $numReposMatched contained a total of $numCommits commits within the given date range"
+    echo "${colors[${config[resultColor]}]}> Found $numCommits commits in $repos repos"
   fi
 fi
 
 if ((${#unrecognizedArgs[@]} != 0)); then
-  echo "Ignored arguments: $unrecognizedArgs"
+  echo "${colors[${config[resultColor]}]}> Ignored arguments: $unrecognizedArgs"
 fi
