@@ -68,7 +68,7 @@ Commands:
    cmd - run any git command in all repositories in current directory
    edit config - edit script config
 
-You can set custom colors in gall.conf:
+You can set font colors by running 'gall edit config' or going into the config file gall.conf directly
   repoColor - Repository heading color
   commitColor - Commit line color
   resultColor - Result line color
@@ -126,7 +126,7 @@ separator() {
 
 printRepoPath() {
   printf "${colors[${config[repoColor]}]}"
-  printf "$pure\n$NC"
+  printf "$repoPath\n$NC"
 }
 
 args=("$@")
@@ -169,25 +169,20 @@ elif [[ ${args[1]} == "log" ]]; then
 elif [[ ${args[1]} == "cmd" ]]; then
   type="cmd"
   echo -n "Command: git "
-  read answer
+  read -r answer
   gitCommand=$answer
-  cmdType=$answer
-
-  echo -n "Sure? (y/n) "
-  read -r answer2
-  if [[ $answer2 == "n" ]]; then
-    exit
-  fi
 elif [[ ${args[1]} == "edit" ]]; then
   if [[ ${args[2]} == "config" ]]; then
     eval "vim ${scriptDir}/gall.conf"
     exit
   fi
+  exit
 elif [[ ${args[1]} == "view" ]]; then
   if [[ ${args[2]} == "config" ]]; then
     eval "cat ${scriptDir}/gall.conf"
     exit
   fi
+  exit
 else
   echo -e "$HELP"
   exit
@@ -202,10 +197,10 @@ find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vsc
   if [[ $dir == *"/.git" ]]; then
     ((repos++))
     # todo combine replaces
-    pure="${dir//\/.git/}"
-    pure="${pure//./}"
+    repoPath="${dir//\/.git/}"
+    repoPath="${repoPath//./}"
 
-    eval "cd $root/$pure"
+    eval "cd $root/$repoPath"
     git="$(eval "git $gitCommand")"
     if [[ $type == "status" ]]; then
       if [[ $git == *"Your branch is ahead"* ]]; then # todo a faster way of matching?
@@ -251,5 +246,5 @@ elif [[ $type == "log" ]]; then
 fi
 
 if ((${#unrecognizedArgs[@]} != 0)); then
-  echo "${colors[${config[resultColor]}]}> Ignored arguments: $unrecognizedArgs"
+  echo "${colors[${config[resultColor]}]}> Ignored arguments: ${unrecognizedArgs[*]}"
 fi
