@@ -37,12 +37,15 @@ colors=(
   [nocolor]=$NC
 )
 
+gitAuthor="$(eval "git config --global --get user.name")"
+
 typeset -A config
-config=(# set default values
+config=(
   [repoColor]="lightblue"
   [commitColor]="nocolor"
   [resultColor]="yellow"
   [repoSepColor]="nocolor"
+  [user]="$gitAuthor"
 )
 
 scriptDir=$(dirname "$0")
@@ -63,6 +66,7 @@ Commands:
      --self - only find commits by you (filtered by user.name in global git config)
      --author - only find commits by specified author (username)
    cmd - run any git command in all repositories in current directory
+   edit config - edit script config
 
 You can set custom colors in gall.conf:
   repoColor - Repository heading color
@@ -95,9 +99,6 @@ You can set custom colors in gall.conf:
       - black
 "
 
-args=("$@")
-gitAuthor="$(eval "git config --global --get user.name")"
-
 validateDate() {
   IFS=\= read -r left right <<<"$1"
   if [[ $right =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
@@ -128,6 +129,7 @@ printRepoPath() {
   printf "$pure\n$NC"
 }
 
+args=("$@")
 if [[ ${args[1]} == "status" ]]; then
   gitCommand="status"
   type="status"
@@ -136,9 +138,21 @@ elif [[ ${args[1]} == "log" ]]; then
   type="log"
   unrecognizedArgs=()
   for arg in ${args}; do
-    if [[ $arg == "--until"* ]] || [[ $arg == "--since"* ]]; then
+    if [[ $arg == "--on"* ]]; then
       if validateDate "$arg"; then
-        gitCommand="$gitCommand $validDate"
+        gitCommand="$gitCommand --since='$right 00:00' --until='$right 23:59'"
+      else
+        exit
+      fi
+    elif [[ $arg == "--since"* ]]; then
+      if validateDate "$arg"; then
+        gitCommand="$gitCommand $validDate 00:00"
+      else
+        exit
+      fi
+    elif [[ $arg == "--until"* ]]; then
+      if validateDate "$arg"; then
+        gitCommand="$gitCommand $validDate 23:59"
       else
         exit
       fi
@@ -147,7 +161,7 @@ elif [[ ${args[1]} == "log" ]]; then
       gitCommand="$gitCommand --author='$right'"
     elif [[ $arg == "self" ]]; then
       filterByAuthor="true"
-      gitCommand="$gitCommand --author='$gitAuthor'"
+      gitCommand="$gitCommand --author='${config[user]}"
     elif [[ $arg != "$type" ]]; then
       unrecognizedArgs+=("$arg")
     fi
@@ -160,8 +174,18 @@ elif [[ ${args[1]} == "cmd" ]]; then
   cmdType=$answer
 
   echo -n "Sure? (y/n) "
-  read answer2
+  read -r answer2
   if [[ $answer2 == "n" ]]; then
+    exit
+  fi
+elif [[ ${args[1]} == "edit" ]]; then
+  if [[ ${args[2]} == "config" ]]; then
+    eval "vim ${scriptDir}/gall.conf"
+    exit
+  fi
+elif [[ ${args[1]} == "view" ]]; then
+  if [[ ${args[2]} == "config" ]]; then
+    eval "cat ${scriptDir}/gall.conf"
     exit
   fi
 else
@@ -169,14 +193,12 @@ else
   exit
 fi
 
-
 root=$PWD
 repos=0
 numReposMatched=0
 numCommits=0
 numCommitsByAuthor=0
 find . -type d \( -path "*/node_modules/*" -o -path "*/.idea/*" -o -path "*/.vscode/*" \) -prune -false -o -name '*.git' | while read -r dir; do
-  # sanity check
   if [[ $dir == *"/.git" ]]; then
     ((repos++))
     # todo combine replaces
@@ -224,7 +246,7 @@ elif [[ $type == "log" ]]; then
   if [[ $filterByAuthor == "true" ]]; then
     echo "${colors[${config[resultColor]}]}> Found $numCommitsByAuthor commits by you in $numReposMatched/$repos repos"
   else
-    echo "${colors[${config[resultColor]}]}> Found $numCommits commits in $repos repos"
+    echo "${colors[${config[resultColor]}]}> Found $numCommits commits in $numReposMatched repos"
   fi
 fi
 
