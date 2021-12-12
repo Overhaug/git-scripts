@@ -61,18 +61,19 @@ HELP="${colors[nocolor]}help
 ${colors[lightblue]}Commands:${colors[nocolor]}
   status - checks status of all repositories in current directory
   log - prints log of all repositories in current directory
+    options:
+      --since - date on which to find commits since, format YYYY-MM-DD
+      --until - date on which to find commits until, format YYYY-MM-DD
+      --on - date on which to find commits
+      --author - only find commits by specified author (username)
     flags:
-     --since - date on which to find commits since, format YYYY-MM-DD
-     --until - date on which to find commits until, format YYYY-MM-DD
-     --on - specify date on which to find commits
-     --today - find commits on this day
-     --self - only find commits by you (filtered by user.name in global git config)
-     --author - only find commits by specified author (username)
-   cmd - run any git command in all repositories in current directory
-   config - config actions
+      --today - find commits on this day
+      --self - only find commits by you (uses user.name in global git config)
+  cmd - run any git command in all repositories in current directory
+  config - config actions
     subcommands:
-      - edit - edit config in vim
-      - view - print config
+      edit - edit config in vim
+      view - print config
 
 ${colors[lightblue]}Config options${colors[nocolor]}
   printCommand - whether to print the final command before running it
@@ -171,7 +172,7 @@ elif [[ ${args[1]} == "log" ]]; then
     elif [[ $arg == "--author"* ]]; then
       splitAndValidateArgOnEq "$arg"
       gitCommand="$gitCommand --author='$right'"
-    elif [[ $arg == "self" ]]; then
+    elif [[ $arg == "--self" ]]; then
       filterByAuthor="true"
       gitCommand="$gitCommand --author='${config[user]}'"
     elif [[ $arg != "$type" ]]; then
@@ -252,9 +253,9 @@ if [[ $type == "status" ]]; then
   echo "${colors[${config[resultColor]}]}> Checked $repos repositories, $numReposMatched are ahead"
 elif [[ $type == "log" ]]; then
   if [[ $filterByAuthor == "true" ]]; then
-    echo "${colors[${config[resultColor]}]}> Found $numCommitsByAuthor commits by you in $numReposMatched/$repos repos"
+    echo "${colors[${config[resultColor]}]}> $numCommitsByAuthor commits by you in $numReposMatched/$repos repos"
   else
-    echo "${colors[${config[resultColor]}]}> Found $numCommits commits in $numReposMatched repos"
+    echo "${colors[${config[resultColor]}]}> $numCommits commits in $numReposMatched repos"
   fi
 fi
 
