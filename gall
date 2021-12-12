@@ -64,6 +64,8 @@ ${colors[lightblue]}Commands:${colors[nocolor]}
     flags:
      --since - date on which to find commits since, format YYYY-MM-DD
      --until - date on which to find commits until, format YYYY-MM-DD
+     --on - specify date on which to find commits
+     --today - find commits on this day
      --self - only find commits by you (filtered by user.name in global git config)
      --author - only find commits by specified author (username)
    cmd - run any git command in all repositories in current directory
@@ -99,7 +101,7 @@ ${colors[lightblue]}Config options${colors[nocolor]}
     ${colors[nocolor]}Yellows:
       - ${colors[yellow]}yellow
     ${colors[nocolor]}Miscellaneous:
-      - nocolor (sets back to default)
+      - nocolor (default color)
       - white
       - black
 "
@@ -130,8 +132,10 @@ separator() {
 }
 
 printRepoPath() {
-  printf "${colors[${config[repoColor]}]}"
-  printf "$repoPath\n$NC"
+  if [[ $repoPath != "" ]]; then
+    printf "${colors[${config[repoColor]}]}"
+    printf "$repoPath\n$NC"
+  fi
 }
 
 args=("$@")
@@ -143,7 +147,10 @@ elif [[ ${args[1]} == "log" ]]; then
   type="log"
   unrecognizedArgs=()
   for arg in ${args}; do
-    if [[ $arg == "--on"* ]]; then
+    if [[ $arg == "--today" ]]; then
+      today=$(date +"%F")
+      gitCommand="$gitCommand --since='$today 00:00' --until='$today 23:59'"
+    elif [[ $arg == "--on"* ]]; then
       if validateDate "$arg"; then
         gitCommand="$gitCommand --since='$right 00:00' --until='$right 23:59'"
       else
@@ -151,13 +158,13 @@ elif [[ ${args[1]} == "log" ]]; then
       fi
     elif [[ $arg == "--since"* ]]; then
       if validateDate "$arg"; then
-        gitCommand="$gitCommand $validDate 00:00"
+        gitCommand="$gitCommand --since='$right 00:00'"
       else
         exit
       fi
     elif [[ $arg == "--until"* ]]; then
       if validateDate "$arg"; then
-        gitCommand="$gitCommand $validDate 23:59"
+        gitCommand="$gitCommand --until='$right 23:59'"
       else
         exit
       fi
@@ -191,7 +198,7 @@ else
 fi
 
 if [[ ${config[printCommand]} == "true" ]]; then
-  echo "$gitCommand"
+  echo "git $gitCommand"
 fi
 
 root=$PWD
